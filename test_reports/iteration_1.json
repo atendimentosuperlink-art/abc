@@ -1,0 +1,47 @@
+{
+  "summary": "Frontend-only smoke + integration test of the Expo 'Vistoria Diária' app on the mobile web preview (390x844). All critical testIDs render, navigation Home→Inspection works, canvas tap drops a numbered pin and opens the marker-sheet Modal, damage-type chips update the pin color, switching view tabs and model chips preserves markers, and the save button is wired. Storage layer is local AsyncStorage (no backend). One minor web-only quirk observed around the save flow's Alert (window.alert blocks JS on web).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Save inspection → return to Home (web preview)",
+        "issue": "onSave uses Alert.alert(...).onPress to call clearDraft() + router.back(). On RN Web this maps to window.alert which is synchronous and has NO callback for the OK button, so clearDraft() and router.back() never run on web preview (history list stays empty until next reload). Works on native iOS/Android. Recommend using a custom modal/toast on web or Platform.OS === 'web' branch that runs the post-save logic immediately.",
+        "affected_testIDs": ["save-inspection-button"]
+      }
+    ],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "verified_features": [
+    "Home screen renders with VISTORIA DIÁRIA title, subtitle, NOVA VISTORIA button, empty-state 'NENHUMA VISTORIA'",
+    "NOVA VISTORIA navigates to /inspection",
+    "Inspection screen exposes field-date (prefilled today '2026-06-30'), field-plate (uppercases 'abc1d23' → 'ABC1D23'), field-driver",
+    "All 3 model chips present: model-chip-uno4p, model-chip-uno2p, model-chip-palio4p (switching updates canvas image)",
+    "All 5 view tabs present: tab-topo, tab-frente, tab-tras, tab-esq, tab-dir (badge count updates per view)",
+    "Canvas tap drops pin and opens marker-sheet Modal with all 5 damage-type-* chips",
+    "Selecting damage type updates marker row label & color (Ferrugem confirmed)",
+    "marker-note input writes to marker; closing sheet returns to canvas with pin visible",
+    "PONTOS MARCADOS list shows added markers (count synced to header subtitle)",
+    "Switching model chip preserves markers (2 markers persisted across model switch)",
+    "Damage type colors in legend match spec: Ferrugem #a8702f, Amassado #4a90d9, Arranhão #f2c94c, Quebrado #e5484d, Outro #9b9b9b (theme.ts verified)",
+    "save-inspection-button and export-pdf-button render and respond to press (no crash)",
+    "App boots without red-screen errors on Expo web preview"
+  ],
+  "test_report_links": ["/app/test_reports/iteration_1.json"],
+  "action_items": [
+    "Fix save flow on web: Alert.alert callbacks don't fire on react-native-web. Move clearDraft() + router.back() out of the Alert OK callback, or use Platform.OS branching, or replace with a custom in-app confirmation Modal so saved inspections actually appear in HISTÓRICO on web preview."
+  ],
+  "critical_code_review_comments": [
+    "inspection.tsx onSave/onClose rely on Alert.alert button onPress callbacks; on react-native-web this is not invoked → post-save side-effects (clearDraft, router.back) are skipped. Same risk for onDelete in index.tsx and the pickPhoto source-picker Alert.",
+    "Long-press deletion on web: react-native-web supports onLongPress via long mouse press, but UX hint says 'Mantenha pressionado para excluir' — acceptable, but consider a small trash icon for web parity.",
+    "carPhotos.ts is ~1.5MB of base64 — intentional but increases initial JS bundle size on web; acceptable for offline-first mobile app."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped)", "frontend": "~92% (1 web-specific save-callback issue)"},
+  "seed_data_creation": "Created 1 in-memory draft inspection during the test session (plate ABC1D23, driver 'Joao Test', 2 markers across topo + frente, model switched to palio4p). Not persisted to history due to web Alert callback issue.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "After main agent fixes the Alert callback issue for web, retest: tap NOVA VISTORIA → add a marker → SALVAR VISTORIA → verify navigation returns to Home AND new history-item-* row appears in HISTÓRICO. Also verify reopening that history item restores markers. PDF export button can only be confirmed as 'press without crash' on web — native sharing dialog won't appear.",
+  "rca_of_issue": "Reproduction: open inspection screen on web, add a marker, click SALVAR VISTORIA. Expected: alert shown then auto-return to Home with new entry in HISTÓRICO. Actual: window.alert appears (RN Web mapping of Alert.alert) but its OK button has no callback — clearDraft() and router.back() never execute. Root cause: react-native-web's Alert polyfill uses window.alert/confirm which ignores the buttons[] callbacks. Mitigation: on web use a Modal or run post-save code immediately after saveInspection() without depending on Alert button callbacks."
+}
