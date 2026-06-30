@@ -1,0 +1,161 @@
+{
+  "app_name": "Vistoria Diária do Veículo",
+  "personality": "7 Dark-First Utility with 5 Brutalist Mobile typography influences",
+  "personality_one_liner": "A robust, high-contrast digital clipboard that feels like a professional mechanic's tool, prioritizing rapid field data entry and uncompromised visibility in an industrial dark workshop environment.",
+  "color": {
+    "surface": "#1c1c1e",
+    "onSurface": "#e8e6e1",
+    "surfaceSecondary": "#262628",
+    "onSurfaceSecondary": "#d0ceca",
+    "surfaceTertiary": "#323235",
+    "onSurfaceTertiary": "#b8b6b2",
+    "surfaceInverse": "#e8e6e1",
+    "onSurfaceInverse": "#1c1c1e",
+    "brand": "#ff6b35",
+    "brandPrimary": "#ff6b35",
+    "onBrandPrimary": "#1c1c1e",
+    "brandSecondary": "#e65c2b",
+    "onBrandSecondary": "#1c1c1e",
+    "brandTertiary": "#4a2c22",
+    "onBrandTertiary": "#ff6b35",
+    "success": "#4CAF50",
+    "onSuccess": "#ffffff",
+    "warning": "#f2c94c",
+    "onWarning": "#1c1c1e",
+    "error": "#e5484d",
+    "onError": "#ffffff",
+    "info": "#4a90d9",
+    "onInfo": "#ffffff",
+    "border": "#3a3a3d",
+    "borderStrong": "#525256",
+    "divider": "#2f2f32",
+    "damageRust": "#a8702f",
+    "damageDent": "#4a90d9",
+    "damageScratch": "#f2c94c",
+    "damageBroken": "#e5484d",
+    "damageOther": "#9b9b9b"
+  },
+  "typography": {
+    "displayFontFamily": "Oswald",
+    "textFontFamily": "Inter",
+    "monoFontFamily": "IBM Plex Mono",
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24
+    }
+  },
+  "spacing": {
+    "rule": "Use rigid, structural spacing. Sharp dividers between sections, edge-to-edge full width containers for forms.",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 2,
+    "md": 4,
+    "lg": 8,
+    "pill": 999
+  },
+  "shadow_tier": "0",
+  "navigation": "stack_only",
+  "icon_set": "MaterialCommunityIcons",
+  "glassmorphism": {
+    "enabled": false,
+    "do's": [
+      "Use solid surfaceSecondary and surfaceTertiary for elevation instead of glass, maintaining the matte, industrial feel."
+    ],
+    "dont's": [
+      "No blur or glass effects anywhere; prioritize maximum contrast and performance for field use."
+    ]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "solid surfaceSecondary",
+      "android": "solid surfaceSecondary",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "expo-blur",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler"
+  },
+  "screens": [
+    {
+      "name": "Home / Dashboard",
+      "purpose": "Launchpad for creating new inspections and viewing history.",
+      "states": {
+        "loading": "Mono-font 'LOADING...' with a solid brand-colored progress bar.",
+        "empty": "No inspections yet. Large #323235 icon of a clipboard.",
+        "error": "Error loading history, retry button in #e5484d."
+      },
+      "layout": "Header with 'Vistoria Diária'. Hero action area with a large 'New Inspection' CTA button (brandPrimary). Below it, a section titled 'HISTORY' containing a list of recent inspections. Each row shows date, plate, and a status chip. Use thick borders and dividers."
+    },
+    {
+      "name": "Inspection Canvas",
+      "purpose": "The core tool to record vehicle data and mark damages directly on the vehicle views.",
+      "states": {
+        "loading": "Loading vehicle models and layout...",
+        "empty": "N/A - Form is initialized with blank fields.",
+        "error": "Could not save inspection data."
+      },
+      "layout": "1. Header: Date, Plate input, Driver input (stacked fields, IBM Plex Mono labels). 2. Vehicle Selector: Horizontal scroll view of chips (Uno Mille, etc.). 3. View Tabs: Topo, Frente, Traseira, Lateral Esq, Lateral Dir. 4. Interactive Canvas: Shows vehicle silhouette/photo for the selected tab; user taps to drop a numbered pin. 5. Marker List: Scrollable list below canvas showing all placed pins, their damage type color, and note. Sticky 'Save Inspection' CTA at bottom."
+    },
+    {
+      "name": "Marker Detail Sheet (Bottom Sheet)",
+      "purpose": "Configure a dropped marker's damage type, notes, and photos.",
+      "states": {
+        "loading": "N/A",
+        "empty": "N/A",
+        "error": "N/A"
+      },
+      "layout": "Triggered when tapping canvas. Displays Pin #. Grid of 5 damage types (Color coded circles/chips: Rust, Dent, Scratch, Broken, Other). Text input for notes. 'Attach Photo' button. 'Delete Marker' button at the very bottom. Uses solid #262628 background."
+    },
+    {
+      "name": "PDF Preview & Export",
+      "purpose": "Review the finalized report and export as PDF.",
+      "states": {
+        "loading": "Generating PDF preview...",
+        "empty": "N/A",
+        "error": "Failed to generate PDF."
+      },
+      "layout": "Modal/Screen. Shows a webview or image preview of the generated document. Sticky bottom bar with 'Export / Share PDF' and 'Close'."
+    }
+  ],
+  "images": {
+    "workshop_bg": {
+      "url": "https://images.unsplash.com/photo-1671351966431-6890f7dedcd7?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1NzZ8MHwxfHNlYXJjaHwxfHxkYXJrJTIwaW5kdXN0cmlhbCUyMGF1dG8lMjB3b3Jrc2hvcCUyMG1lY2hhbmljfGVufDB8fHx8MTc4Mjc5MjA3NXww&ixlib=rb-4.1.0&q=85",
+      "dark": "https://images.unsplash.com/photo-1671351966431-6890f7dedcd7?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1NzZ8MHwxfHNlYXJjaHwxfHxkYXJrJTIwaW5kdXN0cmlhbCUyMGF1dG8lMjB3b3Jrc2hvcCUyMG1lY2hhbmljfGVufDB8fHx8MTc4Mjc5MjA3NXww&ixlib=rb-4.1.0&q=85",
+      "alt": "Dark industrial auto workshop background"
+    },
+    "fiat_uno_ref": {
+      "url": "https://images.unsplash.com/photo-1764427780739-0d866236f58e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzNzl8MHwxfHNlYXJjaHwxfHxmaWF0JTIwdW5vJTIwY2FyfGVufDB8fHx8MTc4Mjc5MjA3NXww&ixlib=rb-4.1.0&q=85",
+      "dark": "https://images.unsplash.com/photo-1764427780739-0d866236f58e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzNzl8MHwxfHNlYXJjaHwxfHxmaWF0JTIwdW5vJTIwY2FyfGVufDB8fHx8MTc4Mjc5MjA3NXww&ixlib=rb-4.1.0&q=85",
+      "alt": "Red vintage Fiat Uno parked outdoors"
+    }
+  },
+  "haptics": {
+    "primary_button_press": "impactMedium",
+    "tab_change": "selection",
+    "drop_marker": "impactHeavy",
+    "select_damage_type": "impactLight",
+    "delete_marker": "notificationWarning",
+    "save_inspection": "notificationSuccess"
+  },
+  "instructions_to_main_agent": [
+    "Strictly follow the Dark-First Utility guidelines. No glassmorphism, no blurs. Maintain a raw, industrial workshop feel.",
+    "Use Oswald for all major headings and uppercase structural labels. Use IBM Plex Mono for technical fields, data points, and inputs (like Plate, Date, Pin Numbers). Use Inter only for longer body text and notes.",
+    "Implement the damage color codes exactly as defined: #a8702f (Rust), #4a90d9 (Dent), #f2c94c (Scratch), #e5484d (Broken), #9b9b9b (Other). These are core to the product's UX.",
+    "The interactive canvas should handle touch coordinates robustly. When tapped, drop a numbered pin, and immediately invoke the Bottom Sheet to select the damage type, which updates the pin's color.",
+    "Borders and dividers should be sharp and structural (shadow_tier 0). Inputs should look like technical form fields (solid surfaceTertiary bg, perhaps a bottom border in borderStrong).",
+    "For the vehicle canvas, since you don't have SVGs out of the box, consider using simple colored placeholder views mapped to the 5 orientations if real silhouettes aren't available, or build a robust component that loads remote images of car sides and overlays absolute positioned markers.",
+    "Keep AsyncStorage logic clean and isolated. Implement PDF generation using expo-print and expo-sharing."
+  ]
+}
