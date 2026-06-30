@@ -151,40 +151,46 @@ export default function InspectionScreen() {
         return;
       }
     }
+    const pickFromLibrary = async () => {
+      const r = await ImagePicker.launchImageLibraryAsync({
+        allowsEditing: false,
+        quality: 0.6,
+        base64: true,
+      });
+      if (!r.canceled && r.assets[0]?.base64) {
+        updateMarker(markerId, { photo: `data:image/jpeg;base64,${r.assets[0].base64}` });
+      }
+    };
+    const pickFromCamera = async () => {
+      const r = await ImagePicker.launchCameraAsync({
+        allowsEditing: false,
+        quality: 0.6,
+        base64: true,
+      });
+      if (!r.canceled && r.assets[0]?.base64) {
+        updateMarker(markerId, { photo: `data:image/jpeg;base64,${r.assets[0].base64}` });
+      }
+    };
+    if (Platform.OS === "web") {
+      // Camera typically unavailable in web preview — go straight to library.
+      await pickFromLibrary();
+      return;
+    }
     Alert.alert("Anexar foto", "Escolha a origem:", [
       { text: "Cancelar", style: "cancel" },
-      {
-        text: "Câmera",
-        onPress: async () => {
-          const r = await ImagePicker.launchCameraAsync({
-            allowsEditing: false,
-            quality: 0.6,
-            base64: true,
-          });
-          if (!r.canceled && r.assets[0]?.base64) {
-            updateMarker(markerId, { photo: `data:image/jpeg;base64,${r.assets[0].base64}` });
-          }
-        },
-      },
-      {
-        text: "Galeria",
-        onPress: async () => {
-          const r = await ImagePicker.launchImageLibraryAsync({
-            allowsEditing: false,
-            quality: 0.6,
-            base64: true,
-          });
-          if (!r.canceled && r.assets[0]?.base64) {
-            updateMarker(markerId, { photo: `data:image/jpeg;base64,${r.assets[0].base64}` });
-          }
-        },
-      },
+      { text: "Câmera", onPress: pickFromCamera },
+      { text: "Galeria", onPress: pickFromLibrary },
     ]);
   };
 
   const onSave = async () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     await saveInspection(insp);
+    if (Platform.OS === "web") {
+      await clearDraft();
+      router.back();
+      return;
+    }
     Alert.alert("Vistoria salva", "Os dados foram armazenados no histórico.", [
       {
         text: "OK",
@@ -207,6 +213,13 @@ export default function InspectionScreen() {
   };
 
   const onClose = async () => {
+    if (Platform.OS === "web") {
+      // On web, Alert button callbacks don't fire reliably. Auto-save and exit.
+      await saveInspection(insp);
+      await clearDraft();
+      router.back();
+      return;
+    }
     Alert.alert("Sair da vistoria?", "Alterações não salvas serão descartadas do histórico.", [
       { text: "Cancelar", style: "cancel" },
       {

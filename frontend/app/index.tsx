@@ -5,6 +5,7 @@ import React, { useCallback, useState } from "react";
 import {
   Alert,
   FlatList,
+  Platform,
   Pressable,
   SafeAreaView,
   StyleSheet,
@@ -75,6 +76,14 @@ export default function HomeScreen() {
   };
 
   const onDelete = (insp: Inspection) => {
+    if (Platform.OS === "web") {
+      // Alert callbacks unreliable on web — delete immediately on long press.
+      deleteInspection(insp.id).then(() => {
+        refresh();
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      });
+      return;
+    }
     Alert.alert(
       "Excluir vistoria?",
       `${insp.plate || "(sem placa)"} · ${formatDate(insp.date)}`,
