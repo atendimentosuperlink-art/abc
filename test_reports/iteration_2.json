@@ -1,0 +1,61 @@
+{
+  "summary": "Iteration 2 frontend-only test of the Expo 'Vistoria Diária' app on mobile web (390x844). ALL 6 new features verified end-to-end: (1) custom vehicles management (gear button in header → /vehicles, empty state, editor modal with 5 view-rows, name input, save, item appears in list), (2) ZoomableCanvas single-tap drops a numbered pin and opens the marker-sheet (pinch zoom not testable on web preview, as expected), (3) signature modal with svg drawing (signature-modal/canvas/undo/clear/confirm/save/close all render; drawing a stroke and confirming closes the modal and shows preview card 'TOQUE PARA EDITAR' on inspection screen), (4) calendar date picker (field-date opens calendar-grid modal with Portuguese month names — Junho — and day labels Dom/Seg/Ter/Qua/Qui/Sex/Sáb; tapping day 15 closes the modal and updates date display to 15/06/2026), (5) splash + (6) app icon — present in app.json; can only verify config, not runtime visuals on web preview. Also verified: manage-vehicles-chip (GERENCIAR) at end of model-chip row navigates to /vehicles; custom vehicle without photos renders the fallback 'SEM IMAGEM PARA ESTA VISTA' placeholder + canvas-add-image button without crashing; end-to-end save flow (new → date → plate → pin → damage → signature → SALVAR) returns to home with a new history-item; PDF export button still pressable without crash; app boots clean (no red screen, no PAGEERROR). The web-preview Alert callback issue from iteration_1 appears RESOLVED (save now correctly returns home and inserts history). Deprecated packages detected: none. SafeAreaView issues detected: none.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "inspection",
+        "issues": [
+          "On a 390x844 viewport, the floating SALVAR VISTORIA bottom button overlaps the bottom edge of the signature card. The signature card is still reachable via scroll, but the 'TOQUE PARA ASSINAR' label of the card initially sits partially under the CTA. Consider adding paddingBottom = 80 to the ScrollView content so the signature card never sits under the CTA. (Reference: /app/frontend/app/inspection.tsx signature card vs save-inspection-button)"
+        ]
+      }
+    ],
+    "react_native_issues": [
+      {
+        "component": "expo-image (model-chip / canvas Image)",
+        "issue": "Console warning on render: 'Image: style.tintColor is deprecated. Please use props.tintColor.' Not blocking but should be migrated. Reference: /app/frontend/app/inspection.tsx (and possibly /app/frontend/src/components/Signature.tsx) — likely from a MaterialCommunityIcons or expo-image with tintColor inside StyleSheet style instead of as a prop."
+      }
+    ]
+  },
+  "verified_features": [
+    "open-vehicles-button (gear) in home header → navigates to /vehicles",
+    "vehicles-screen empty state 'NENHUM VEÍCULO PERSONALIZADO' renders",
+    "vehicle-create-button (+) opens vehicle-editor modal",
+    "vehicle-editor exposes vehicle-name-input, all 5 view-row-{topo|frente|tras|esq|dir} with view-add-{id}, editor-save, editor-close",
+    "Saving a vehicle with only a name (no photos) returns to vehicles list and shows new vehicle-item-* row",
+    "manage-vehicles-chip (GERENCIAR) appears at end of model chips on inspection screen and navigates to /vehicles",
+    "field-date opens a calendar modal with testID='calendar-grid'",
+    "Calendar header shows Portuguese month name (Junho) and day labels Dom/Seg/Ter/Qua/Qui/Sex/Sáb",
+    "Selecting day '15' closes the calendar and updates field-date label to dd/mm/yyyy (15/06/2026)",
+    "Vehicle canvas wrapped in ZoomableCanvas: single tap drops a numbered pin and opens the marker-sheet modal",
+    "Marker-sheet renders damage-type-{ferrugem|amassado|arranhao|quebrado|outro} chips; selecting one creates a marker visible in PONTOS MARCADOS list",
+    "Hint text under canvas reads 'Toque para marcar · Pince com 2 dedos para dar zoom · Toque 2x para resetar'",
+    "signature-open Pressable card with 'TOQUE PARA ASSINAR' renders under marker list",
+    "Tapping signature-open opens signature-modal with header 'ASSINATURA · ASSINE COM O DEDO NO ESPAÇO ABAIXO'",
+    "All signature action testIDs present: signature-canvas, signature-undo, signature-clear, signature-confirm, signature-save, signature-close",
+    "Drawing a stroke on signature-canvas (mouse down → move → up) records a path; tapping signature-confirm closes the modal and the inspection screen now shows a signature preview card with 'TOQUE PARA EDITAR'",
+    "Loading inspection with a custom vehicle that has 0 photos renders the canvas fallback 'SEM IMAGEM PARA ESTA VISTA' + canvas-add-image without crashing the screen",
+    "End-to-end save flow on web preview now works: SALVAR VISTORIA → returns to home-screen → new history-item-* present in HISTÓRICO (iteration_1's Alert-callback issue is FIXED)",
+    "history-export-* (PDF) Pressable responds to click without crash on web preview"
+  ],
+  "test_report_links": ["/app/test_reports/iteration_2.json"],
+  "action_items": [
+    "Minor (nice-to-have): Add paddingBottom (~80px) to the inspection ScrollView so the signature card never sits under the floating SALVAR VISTORIA CTA on small phones.",
+    "Minor (warning): Migrate any `style.tintColor` usage to the `tintColor` PROP for expo-image (warning: 'Image: style.tintColor is deprecated. Please use props.tintColor.'). Check inspection.tsx and Signature.tsx.",
+    "Note for spec alignment: damage-type testIDs are lowercase (damage-type-ferrugem/amassado/arranhao/quebrado/outro), while the review spec shows them capitalized (damage-type-Amassado). The lowercase form is consistent with iteration_1 and works correctly — recommend updating the spec rather than the code, but flag for awareness.",
+    "Not testable on web preview (no native build available): pinch-to-zoom on ZoomableCanvas, double-tap reset, runtime visual of splash screen and app icon. These should be validated on a native build (EAS dev-client or Expo Go) before release."
+  ],
+  "critical_code_review_comments": [
+    "/app/frontend/src/components/ZoomableCanvas.tsx exposes only `onTap` and does not forward a testID to its root touchable. Adding `testID='vehicle-canvas'` (or accepting it via props) would make automated tests more reliable; today tests must locate the canvas by clicking the largest <img>.",
+    "/app/frontend/app/inspection.tsx grew significantly with signature + calendar + zoom + vehicles wiring (~1276 lines per grep output). Consider extracting MarkerSheet, ViewTabs, ModelChips, and the signature card into separate components under /app/frontend/src/components/ to stay under the 700-line guideline.",
+    "Local-storage only: clearing /vistoria/* on logout/reset isn't applicable here, but for QA there is no in-app 'reset' — testers must use devtools localStorage.clear(). Acceptable for this app's scope."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped)", "frontend": "100% of testable web-preview features (pinch zoom + native splash/icon excluded as not web-testable)"},
+  "seed_data_creation": "Created in-memory: 1 custom vehicle ('TEST_NoPhotos'), 1 inspection (plate 'TST1A23', date 15/06/2026, 1 marker on TOPO, signed). All persisted to localStorage and visible in HISTÓRICO after save. localStorage was cleared between stages to avoid stale drafts.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "If asked to re-run: always start by clearing localStorage (localStorage.clear() in browser console) because drafts persist across reloads. To test pinch-zoom and PiP-like behaviors you must use a native build — not possible on the web preview. The damage-type testIDs are LOWERCASE (damage-type-amassado etc.). The vehicle canvas does NOT have its own testID — tap the largest <img> on the inspection screen to drop a pin. Editor-save in the vehicle-editor modal lives in the modal header; scroll it into view before clicking on small viewports. Calendar uses react-native-calendars with PT-BR locale already wired up."
+}

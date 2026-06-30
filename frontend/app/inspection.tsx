@@ -2,7 +2,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
@@ -18,12 +18,17 @@ import {
   View,
 } from "react-native";
 
-import { CAR_PHOTOS } from "@/src/data/carPhotos";
+import DatePickerModal from "@/src/components/DatePicker";
+import SignatureModal, { SignaturePreview } from "@/src/components/Signature";
+import ZoomableCanvas from "@/src/components/ZoomableCanvas";
 import { exportInspectionPdf } from "@/src/pdf";
 import {
+  CustomVehicle,
   Inspection,
   Marker,
+  SignaturePath,
   clearDraft,
+  loadCustomVehicles,
   loadDraft,
   newId,
   saveDraft,
@@ -39,39 +44,51 @@ import {
   VIEWS,
   ViewId,
 } from "@/src/theme";
-
-const MODEL_KEYS = Object.keys(CAR_PHOTOS);
+import { mergeVehicles } from "@/src/vehicles";
 
 function todayIso(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+function formatDate(iso: string): string {
+  if (!iso) return "—";
+  const [y, m, d] = iso.split("-");
+  if (!y || !m || !d) return iso;
+  return `${d}/${m}/${y}`;
+}
+
 export default function InspectionScreen() {
   const router = useRouter();
-  useLocalSearchParams<{ id?: string; mode?: string }>();
 
   const [insp, setInsp] = useState<Inspection | null>(null);
+  const [custom, setCustom] = useState<CustomVehicle[]>([]);
   const [activeView, setActiveView] = useState<ViewId>("topo");
   const [activeMarker, setActiveMarker] = useState<Marker | null>(null);
-  const [canvasSize, setCanvasSize] = useState({ w: 0, h: 0 });
   const [photoModal, setPhotoModal] = useState<string | null>(null);
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
+  const [signatureOpen, setSignatureOpen] = useState(false);
   const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Load draft on mount
+  const vehicles = useMemo(() => mergeVehicles(custom), [custom]);
+  const MODEL_KEYS = useMemo(() => vehicles.map((v) => v.key), [vehicles]);
+
+  // Load draft + custom vehicles on mount
   useEffect(() => {
     (async () => {
-      const draft = await loadDraft();
+      const [draft, cv] = await Promise.all([loadDraft(), loadCustomVehicles()]);
+      setCustom(cv);
       if (draft) {
         setInsp(draft);
       } else {
+        const merged = mergeVehicles(cv);
         setInsp({
           id: newId(),
           createdAt: new Date().toISOString(),
           date: todayIso(),
           plate: "",
           driver: "",
-          model: MODEL_KEYS[0],
+          model: merged[0]?.key || "uno4p",
           markers: [],
         });
       }
@@ -90,8 +107,11 @@ export default function InspectionScreen() {
     };
   }, [insp]);
 
-  const carPhotos = useMemo(() => (insp ? CAR_PHOTOS[insp.model] : null), [insp]);
-  const currentImg = carPhotos?.views?.[activeView];
+  const currentVehicle = useMemo(
+    () => (insp ? vehicles.find((v) => v.key === insp.model) : undefined),
+    [insp, vehicles]
+  );
+  const currentImg = currentVehicle?.views?.[activeView];
 
   const markersInView = useMemo(
     () => (insp ? insp.markers.filter((m) => m.view === activeView) : []),
@@ -109,17 +129,16 @@ export default function InspectionScreen() {
   const updateInsp = (patch: Partial<Inspection>) =>
     setInsp((prev) => (prev ? { ...prev, ...patch } : prev));
 
-  const handleCanvasTap = (evt: any) => {
-    if (!currentImg || canvasSize.w === 0) return;
-    const { locationX, locationY } = evt.nativeEvent;
-    const x = Math.max(0, Math.min(1, locationX / canvasSize.w));
-    const y = Math.max(0, Math.min(1, locationY / canvasSize.h));
+  const handleCanvasTap = (x: number, y: number, size: { w: number; h: number }) => {
+    if (!currentImg) return;
+    const rx = Math.max(0, Math.min(1, x / size.w));
+    const ry = Math.max(0, Math.min(1, y / size.h));
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     const m: Marker = {
       id: newId(),
       view: activeView,
-      x,
-      y,
+      x: rx,
+      y: ry,
       type: "arranhao",
       note: "",
     };
@@ -172,7 +191,6 @@ export default function InspectionScreen() {
       }
     };
     if (Platform.OS === "web") {
-      // Camera typically unavailable in web preview — go straight to library.
       await pickFromLibrary();
       return;
     }
@@ -206,7 +224,7 @@ export default function InspectionScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
       await saveInspection(insp);
-      await exportInspectionPdf(insp);
+      await exportInspectionPdf(insp, custom);
     } catch (e: any) {
       Alert.alert("Erro ao exportar", e?.message || "Tente novamente.");
     }
@@ -214,7 +232,6 @@ export default function InspectionScreen() {
 
   const onClose = async () => {
     if (Platform.OS === "web") {
-      // On web, Alert button callbacks don't fire reliably. Auto-save and exit.
       await saveInspection(insp);
       await clearDraft();
       router.back();
@@ -241,6 +258,12 @@ export default function InspectionScreen() {
     ]);
   };
 
+  const onSignatureSave = (paths: SignaturePath[]) => {
+    updateInsp({ signature: paths });
+    setSignatureOpen(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
   const aspectRatio =
     currentImg && currentImg.w && currentImg.h ? currentImg.w / currentImg.h : 16 / 10;
 
@@ -258,7 +281,8 @@ export default function InspectionScreen() {
           <View style={{ flex: 1 }}>
             <Text style={styles.headerTitle}>VISTORIA</Text>
             <Text style={styles.headerSub}>
-              {insp.markers.length} PONTO{insp.markers.length === 1 ? "" : "S"} · {VIEWS.find((v) => v.id === activeView)?.label.toUpperCase()}
+              {insp.markers.length} PONTO{insp.markers.length === 1 ? "" : "S"} ·{" "}
+              {VIEWS.find((v) => v.id === activeView)?.label.toUpperCase()}
             </Text>
           </View>
           <Pressable testID="export-pdf-button" onPress={onExport} hitSlop={10} style={styles.iconBtn}>
@@ -269,14 +293,21 @@ export default function InspectionScreen() {
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 100 }}>
           {/* Meta fields */}
           <View style={styles.metaRow}>
-            <Field
-              testID="field-date"
-              label="DATA"
-              value={insp.date}
-              placeholder="AAAA-MM-DD"
-              onChangeText={(v) => updateInsp({ date: v })}
-              style={{ flex: 1.2 }}
-            />
+            {/* Date as calendar trigger */}
+            <View style={{ flex: 1.2 }}>
+              <Text style={styles.fieldLabel}>DATA</Text>
+              <Pressable
+                testID="field-date"
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setDatePickerOpen(true);
+                }}
+                style={styles.dateBtn}
+              >
+                <MaterialCommunityIcons name="calendar" size={18} color={COLORS.accent} />
+                <Text style={styles.dateText}>{formatDate(insp.date)}</Text>
+              </Pressable>
+            </View>
             <Field
               testID="field-plate"
               label="PLACA"
@@ -307,6 +338,7 @@ export default function InspectionScreen() {
           >
             {MODEL_KEYS.map((k) => {
               const active = insp.model === k;
+              const v = vehicles.find((x) => x.key === k);
               return (
                 <Pressable
                   testID={`model-chip-${k}`}
@@ -317,12 +349,28 @@ export default function InspectionScreen() {
                   }}
                   style={[styles.chip, active && styles.chipActive]}
                 >
+                  {v?.isCustom && (
+                    <MaterialCommunityIcons
+                      name="account-wrench"
+                      size={12}
+                      color={active ? COLORS.bg : COLORS.accent}
+                      style={{ marginRight: 4 }}
+                    />
+                  )}
                   <Text style={[styles.chipText, active && styles.chipTextActive]}>
-                    {CAR_PHOTOS[k].label}
+                    {v?.label || k}
                   </Text>
                 </Pressable>
               );
             })}
+            <Pressable
+              testID="manage-vehicles-chip"
+              onPress={() => router.push("/vehicles")}
+              style={[styles.chip, styles.manageChip]}
+            >
+              <MaterialCommunityIcons name="plus" size={14} color={COLORS.accent} />
+              <Text style={[styles.chipText, { color: COLORS.accent, marginLeft: 4 }]}>GERENCIAR</Text>
+            </Pressable>
           </ScrollView>
 
           {/* View tabs */}
@@ -349,7 +397,9 @@ export default function InspectionScreen() {
                   </Text>
                   {count > 0 && (
                     <View style={[styles.tabBadge, active && { backgroundColor: COLORS.bg }]}>
-                      <Text style={[styles.tabBadgeText, active && { color: COLORS.accent }]}>{count}</Text>
+                      <Text style={[styles.tabBadgeText, active && { color: COLORS.accent }]}>
+                        {count}
+                      </Text>
                     </View>
                   )}
                 </Pressable>
@@ -357,15 +407,11 @@ export default function InspectionScreen() {
             })}
           </ScrollView>
 
-          {/* Canvas */}
+          {/* Canvas — zoomable */}
           <View style={styles.canvasCard}>
-            <Pressable
-              testID="canvas"
-              onPress={handleCanvasTap}
-              onLayout={(e) =>
-                setCanvasSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })
-              }
+            <ZoomableCanvas
               style={[styles.canvas, { aspectRatio }]}
+              onTap={handleCanvasTap}
             >
               {currentImg?.src ? (
                 <Image
@@ -376,8 +422,17 @@ export default function InspectionScreen() {
                 />
               ) : (
                 <View style={styles.canvasPlaceholder}>
-                  <MaterialCommunityIcons name="car-side" size={64} color={COLORS.surface3} />
-                  <Text style={styles.canvasPlaceholderText}>SEM IMAGEM</Text>
+                  <MaterialCommunityIcons name="image-off" size={48} color="#999" />
+                  <Text style={styles.canvasPlaceholderText}>SEM IMAGEM PARA ESTA VISTA</Text>
+                  {currentVehicle?.isCustom && (
+                    <Pressable
+                      onPress={() => router.push("/vehicles")}
+                      style={styles.canvasAddBtn}
+                      testID="canvas-add-image"
+                    >
+                      <Text style={styles.canvasAddText}>ADICIONAR FOTO</Text>
+                    </Pressable>
+                  )}
                 </View>
               )}
 
@@ -406,8 +461,10 @@ export default function InspectionScreen() {
                   </Pressable>
                 );
               })}
-            </Pressable>
-            <Text style={styles.canvasHint}>Toque em qualquer ponto do desenho para marcar uma avaria</Text>
+            </ZoomableCanvas>
+            <Text style={styles.canvasHint}>
+              Toque para marcar · Pince com 2 dedos para dar zoom · Toque 2x para resetar
+            </Text>
             <View style={styles.legend}>
               {Object.entries(DAMAGE_TYPES).map(([key, val]) => (
                 <View style={styles.legendItem} key={key}>
@@ -444,7 +501,8 @@ export default function InspectionScreen() {
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.markerType}>
-                      {dt.label.toUpperCase()} <Text style={styles.markerView}>· {viewLabel?.toUpperCase()}</Text>
+                      {dt.label.toUpperCase()}{" "}
+                      <Text style={styles.markerView}>· {viewLabel?.toUpperCase()}</Text>
                     </Text>
                     <Text style={styles.markerNote} numberOfLines={1}>
                       {m.note || "Sem observação"}
@@ -463,6 +521,44 @@ export default function InspectionScreen() {
               );
             })
           )}
+
+          {/* Signature */}
+          <View style={styles.listHeader}>
+            <Text style={styles.listTitle}>ASSINATURA DO CONDUTOR</Text>
+            {insp.signature && insp.signature.length > 0 && (
+              <Pressable
+                testID="signature-clear-inline"
+                onPress={() => updateInsp({ signature: [] })}
+                hitSlop={10}
+              >
+                <MaterialCommunityIcons name="eraser" size={20} color={COLORS.error} />
+              </Pressable>
+            )}
+          </View>
+
+          <Pressable
+            testID="signature-open"
+            onPress={() => {
+              Haptics.selectionAsync();
+              setSignatureOpen(true);
+            }}
+            style={styles.signatureCard}
+          >
+            {insp.signature && insp.signature.length > 0 ? (
+              <View style={styles.signaturePreviewWrap}>
+                <SignaturePreview paths={insp.signature} width={280} height={110} />
+                <Text style={styles.signatureTapAgain}>TOQUE PARA EDITAR</Text>
+              </View>
+            ) : (
+              <View style={styles.signaturePlaceholder}>
+                <MaterialCommunityIcons name="draw-pen" size={32} color={COLORS.accent} />
+                <Text style={styles.signaturePlaceholderText}>TOQUE PARA ASSINAR</Text>
+                <Text style={styles.signaturePlaceholderSub}>
+                  Assinatura desenhada com o dedo
+                </Text>
+              </View>
+            )}
+          </Pressable>
         </ScrollView>
 
         {/* Bottom action bar */}
@@ -502,6 +598,22 @@ export default function InspectionScreen() {
           )}
         </Pressable>
       </Modal>
+
+      {/* Date Picker */}
+      <DatePickerModal
+        visible={datePickerOpen}
+        selected={insp.date}
+        onClose={() => setDatePickerOpen(false)}
+        onSelect={(d) => updateInsp({ date: d })}
+      />
+
+      {/* Signature */}
+      <SignatureModal
+        visible={signatureOpen}
+        initial={insp.signature}
+        onClose={() => setSignatureOpen(false)}
+        onSave={onSignatureSave}
+      />
     </SafeAreaView>
   );
 }
@@ -730,6 +842,23 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.mono,
     fontSize: 13,
   },
+  dateBtn: {
+    backgroundColor: COLORS.surface2,
+    borderWidth: 1,
+    borderColor: COLORS.line,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.sm,
+  },
+  dateText: {
+    color: COLORS.ink,
+    fontFamily: FONTS.mono,
+    fontSize: 13,
+    fontWeight: "600",
+  },
   chipsLabel: {
     fontFamily: FONTS.mono,
     fontSize: 9,
@@ -741,13 +870,14 @@ const styles = StyleSheet.create({
   },
   chipsRow: { paddingHorizontal: SPACING.lg, gap: SPACING.sm },
   chip: {
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: SPACING.md,
     height: 36,
     borderRadius: RADIUS.md,
     backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.line,
-    alignItems: "center",
     justifyContent: "center",
     flexShrink: 0,
   },
@@ -760,6 +890,11 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   chipTextActive: { color: COLORS.bg },
+  manageChip: {
+    borderStyle: "dashed",
+    borderColor: COLORS.accent,
+    backgroundColor: "transparent",
+  },
   tabsRow: {
     paddingHorizontal: SPACING.lg,
     marginTop: SPACING.lg,
@@ -811,18 +946,33 @@ const styles = StyleSheet.create({
   canvas: {
     width: "100%",
     backgroundColor: COLORS.paper,
-    overflow: "hidden",
   },
   canvasPlaceholder: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
     gap: SPACING.sm,
+    padding: SPACING.lg,
   },
   canvasPlaceholderText: {
     fontFamily: FONTS.mono,
-    color: COLORS.inkDim,
+    fontSize: 11,
+    color: "#666",
     letterSpacing: 2,
+  },
+  canvasAddBtn: {
+    marginTop: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 8,
+    backgroundColor: COLORS.accent,
+    borderRadius: RADIUS.md,
+  },
+  canvasAddText: {
+    fontFamily: FONTS.display,
+    fontSize: 11,
+    letterSpacing: 1.5,
+    color: COLORS.bg,
+    fontWeight: "800",
   },
   canvasHint: {
     fontFamily: FONTS.mono,
@@ -924,6 +1074,41 @@ const styles = StyleSheet.create({
   markerView: { color: COLORS.inkDim, fontSize: 11 },
   markerNote: { fontFamily: FONTS.text, color: COLORS.inkDim, fontSize: 12, marginTop: 2 },
   markerThumb: { width: 44, height: 44, borderRadius: RADIUS.sm },
+
+  /* Signature inline */
+  signatureCard: {
+    marginHorizontal: SPACING.lg,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
+    minHeight: 140,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: COLORS.line,
+    borderStyle: "dashed",
+  },
+  signaturePlaceholder: { alignItems: "center", gap: 6 },
+  signaturePlaceholderText: {
+    fontFamily: FONTS.display,
+    fontSize: 13,
+    color: COLORS.accent,
+    letterSpacing: 1.5,
+    fontWeight: "800",
+  },
+  signaturePlaceholderSub: {
+    fontFamily: FONTS.text,
+    fontSize: 11,
+    color: COLORS.inkDim,
+  },
+  signaturePreviewWrap: { alignItems: "center", gap: 8 },
+  signatureTapAgain: {
+    fontFamily: FONTS.mono,
+    fontSize: 9,
+    color: COLORS.inkDim,
+    letterSpacing: 1.5,
+  },
+
   bottomBar: {
     position: "absolute",
     left: 0,

@@ -1,8 +1,8 @@
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { DAMAGE_TYPES, VIEWS } from "./theme";
-import type { Inspection } from "./storage";
-import { CAR_PHOTOS } from "./data/carPhotos";
+import type { CustomVehicle, Inspection } from "./storage";
+import { getVehicle } from "./vehicles";
 
 function escapeHtml(s: string): string {
   return s
@@ -12,16 +12,16 @@ function escapeHtml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-function buildHtml(insp: Inspection): string {
-  const carModel = CAR_PHOTOS[insp.model];
-  const modelLabel = carModel?.label || insp.model || "—";
+function buildHtml(insp: Inspection, custom: CustomVehicle[]): string {
+  const vehicle = getVehicle(custom, insp.model);
+  const modelLabel = vehicle?.label || insp.model || "—";
 
   const viewsHtml = VIEWS.map((v) => {
-    const car = carModel?.views?.[v.id];
+    const car = vehicle?.views?.[v.id];
     if (!car?.src) return "";
     const markersInView = insp.markers.filter((m) => m.view === v.id);
     const pinsHtml = markersInView
-      .map((m, idx) => {
+      .map((m) => {
         const globalIdx = insp.markers.indexOf(m) + 1;
         const color = DAMAGE_TYPES[m.type].color;
         return `<div style="position:absolute;left:${m.x * 100}%;top:${m.y * 100}%;transform:translate(-50%,-50%);width:26px;height:26px;border-radius:50%;background:${color};color:#fff;font:bold 12px sans-serif;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 0 0 2px #1c1c1e;">${globalIdx}</div>`;
@@ -54,6 +54,21 @@ function buildHtml(insp: Inspection): string {
     })
     .join("");
 
+  const signatureHtml = (() => {
+    if (!insp.signature || insp.signature.length === 0) {
+      return `<div class="sig-block"><div class="sig-line"></div><div class="sig-label">Assinatura do Condutor</div></div>`;
+    }
+    const paths = insp.signature
+      .map((p) => `<path d="${p.d}" stroke="#1c1c1e" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`)
+      .join("");
+    return `
+      <div class="sig-block">
+        <svg viewBox="0 0 360 140" preserveAspectRatio="xMidYMid meet" style="width:100%;height:140px;">${paths}</svg>
+        <div class="sig-line"></div>
+        <div class="sig-label">Assinatura do Condutor — ${escapeHtml(insp.driver || "—")}</div>
+      </div>`;
+  })();
+
   return `
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -76,6 +91,9 @@ function buildHtml(insp: Inspection): string {
   .legend{display:flex;flex-wrap:wrap;gap:14px;margin:8px 0 16px;font-size:10px;}
   .legend span{display:inline-flex;align-items:center;gap:5px;}
   .dot{display:inline-block;width:10px;height:10px;border-radius:50%;}
+  .sig-block{margin-top:48px;page-break-inside:avoid;}
+  .sig-line{border-top:1px solid #1c1c1e;width:100%;margin-top:4px;}
+  .sig-label{font-size:10px;color:#666;letter-spacing:1px;text-transform:uppercase;margin-top:4px;text-align:center;}
   .footer{margin-top:24px;font-size:9px;color:#999;text-align:center;border-top:1px solid #eee;padding-top:8px;}
 </style>
 </head>
@@ -97,7 +115,7 @@ function buildHtml(insp: Inspection): string {
       .join("")}
   </div>
 
-  ${viewsHtml || '<p style="color:#999">Sem imagens de modelo disponíveis.</p>'}
+  ${viewsHtml || '<p style="color:#999">Sem imagens cadastradas para este veículo.</p>'}
 
   <h2 style="font-size:14px;text-transform:uppercase;letter-spacing:1px;margin-top:24px;border-bottom:1px solid #ff6b35;padding-bottom:4px;">Pontos marcados</h2>
   ${
@@ -109,13 +127,15 @@ function buildHtml(insp: Inspection): string {
         </table>`
   }
 
+  ${signatureHtml}
+
   <div class="footer">Vistoria Diária · Documento gerado automaticamente</div>
 </body>
 </html>`;
 }
 
-export async function exportInspectionPdf(insp: Inspection): Promise<void> {
-  const html = buildHtml(insp);
+export async function exportInspectionPdf(insp: Inspection, custom: CustomVehicle[]): Promise<void> {
+  const html = buildHtml(insp, custom);
   const { uri } = await Print.printToFileAsync({ html, base64: false });
   if (await Sharing.isAvailableAsync()) {
     await Sharing.shareAsync(uri, {

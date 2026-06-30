@@ -11,18 +11,35 @@ export type Marker = {
   photo?: string; // base64 data uri
 };
 
+export type SignaturePath = { d: string }; // SVG path "M x y L x y ..."
+
 export type Inspection = {
   id: string;
   createdAt: string; // ISO
   date: string; // yyyy-mm-dd
   plate: string;
   driver: string;
-  model: string; // car model key (e.g. uno4p)
+  model: string; // car model key
   markers: Marker[];
+  signature?: SignaturePath[]; // multi-stroke
+};
+
+export type CustomVehicleView = {
+  src: string; // data:image/jpeg;base64,...
+  w: number;
+  h: number;
+};
+
+export type CustomVehicle = {
+  key: string;
+  label: string;
+  createdAt: string;
+  views: Partial<Record<ViewId, CustomVehicleView>>;
 };
 
 const KEY_HISTORY = "@vistoria/history/v1";
 const KEY_DRAFT = "@vistoria/draft/v1";
+const KEY_CUSTOM_VEHICLES = "@vistoria/customVehicles/v1";
 
 export async function loadHistory(): Promise<Inspection[]> {
   try {
@@ -61,6 +78,35 @@ export async function saveDraft(insp: Inspection): Promise<void> {
 
 export async function clearDraft(): Promise<void> {
   await AsyncStorage.removeItem(KEY_DRAFT);
+}
+
+export async function loadCustomVehicles(): Promise<CustomVehicle[]> {
+  try {
+    const raw = await AsyncStorage.getItem(KEY_CUSTOM_VEHICLES);
+    return raw ? (JSON.parse(raw) as CustomVehicle[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function saveCustomVehicles(list: CustomVehicle[]): Promise<void> {
+  await AsyncStorage.setItem(KEY_CUSTOM_VEHICLES, JSON.stringify(list));
+}
+
+export async function upsertCustomVehicle(v: CustomVehicle): Promise<CustomVehicle[]> {
+  const list = await loadCustomVehicles();
+  const idx = list.findIndex((x) => x.key === v.key);
+  if (idx >= 0) list[idx] = v;
+  else list.unshift(v);
+  await saveCustomVehicles(list);
+  return list;
+}
+
+export async function deleteCustomVehicle(key: string): Promise<CustomVehicle[]> {
+  const list = await loadCustomVehicles();
+  const next = list.filter((v) => v.key !== key);
+  await saveCustomVehicles(next);
+  return next;
 }
 
 export function newId(): string {

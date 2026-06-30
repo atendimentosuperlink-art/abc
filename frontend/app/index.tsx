@@ -15,14 +15,16 @@ import {
 
 import { COLORS, FONTS, RADIUS, SPACING } from "@/src/theme";
 import {
+  CustomVehicle,
   Inspection,
   deleteInspection,
+  loadCustomVehicles,
   loadHistory,
   newId,
   saveDraft,
 } from "@/src/storage";
 import { exportInspectionPdf } from "@/src/pdf";
-import { CAR_PHOTOS } from "@/src/data/carPhotos";
+import { mergeVehicles } from "@/src/vehicles";
 
 function todayIso(): string {
   const d = new Date();
@@ -42,10 +44,12 @@ function formatDate(iso: string): string {
 export default function HomeScreen() {
   const router = useRouter();
   const [history, setHistory] = useState<Inspection[]>([]);
+  const [custom, setCustom] = useState<CustomVehicle[]>([]);
 
   const refresh = useCallback(async () => {
-    const list = await loadHistory();
+    const [list, c] = await Promise.all([loadHistory(), loadCustomVehicles()]);
     setHistory(list);
+    setCustom(c);
   }, []);
 
   useFocusEffect(
@@ -56,13 +60,14 @@ export default function HomeScreen() {
 
   const startNew = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const firstModel = mergeVehicles(custom)[0]?.key || "uno4p";
     const draft: Inspection = {
       id: newId(),
       createdAt: new Date().toISOString(),
       date: todayIso(),
       plate: "",
       driver: "",
-      model: Object.keys(CAR_PHOTOS)[0],
+      model: firstModel,
       markers: [],
     };
     await saveDraft(draft);
@@ -77,7 +82,6 @@ export default function HomeScreen() {
 
   const onDelete = (insp: Inspection) => {
     if (Platform.OS === "web") {
-      // Alert callbacks unreliable on web — delete immediately on long press.
       deleteInspection(insp.id).then(() => {
         refresh();
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
@@ -105,14 +109,15 @@ export default function HomeScreen() {
   const onExport = async (insp: Inspection) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
-      await exportInspectionPdf(insp);
+      await exportInspectionPdf(insp, custom);
     } catch (e: any) {
       Alert.alert("Erro ao exportar", e?.message || "Tente novamente.");
     }
   };
 
   const renderItem = ({ item }: { item: Inspection }) => {
-    const modelLabel = CAR_PHOTOS[item.model]?.label || item.model;
+    const modelLabel =
+      mergeVehicles(custom).find((v) => v.key === item.model)?.label || item.model;
     return (
       <Pressable
         testID={`history-item-${item.id}`}
@@ -151,11 +156,18 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={styles.safe} testID="home-screen">
       <View style={styles.header}>
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={styles.title}>VISTORIA DIÁRIA</Text>
           <Text style={styles.subtitle}>CHECKLIST VISUAL DE INSPEÇÃO</Text>
         </View>
-        <MaterialCommunityIcons name="car-wrench" size={32} color={COLORS.accent} />
+        <Pressable
+          testID="open-vehicles-button"
+          hitSlop={10}
+          onPress={() => router.push("/vehicles")}
+          style={styles.headerBtn}
+        >
+          <MaterialCommunityIcons name="car-cog" size={26} color={COLORS.accent} />
+        </Pressable>
       </View>
 
       <Pressable
@@ -169,7 +181,9 @@ export default function HomeScreen() {
 
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>HISTÓRICO</Text>
-        <Text style={styles.sectionMeta}>{history.length} REGISTRO{history.length === 1 ? "" : "S"}</Text>
+        <Text style={styles.sectionMeta}>
+          {history.length} REGISTRO{history.length === 1 ? "" : "S"}
+        </Text>
       </View>
 
       <FlatList
@@ -209,6 +223,17 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     borderBottomWidth: 2,
     borderBottomColor: COLORS.accent,
+    gap: SPACING.sm,
+  },
+  headerBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: COLORS.surface,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: COLORS.line,
   },
   title: {
     fontFamily: FONTS.display,
