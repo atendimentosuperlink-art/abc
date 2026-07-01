@@ -290,7 +290,7 @@ export default function InspectionScreen() {
           </Pressable>
         </View>
 
-        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 100 }}>
+        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 140 }}>
           {/* Meta fields */}
           <View style={styles.metaRow}>
             {/* Date as calendar trigger */}
@@ -410,6 +410,7 @@ export default function InspectionScreen() {
           {/* Canvas — zoomable */}
           <View style={styles.canvasCard}>
             <ZoomableCanvas
+              testID="canvas"
               style={[styles.canvas, { aspectRatio }]}
               onTap={handleCanvasTap}
             >

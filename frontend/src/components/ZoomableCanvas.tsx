@@ -15,6 +15,7 @@ type Props = {
   style?: ViewStyle;
   children: React.ReactNode;
   onTap?: (x: number, y: number, size: { w: number; h: number }) => void;
+  testID?: string;
 };
 
 const MIN_SCALE = 1;
@@ -32,7 +33,7 @@ const TAP_MAX_DURATION = 250;
  *
  * The children should fill the container; we apply a transform on a wrapper Animated.View.
  */
-export default function ZoomableCanvas({ style, children, onTap }: Props) {
+export default function ZoomableCanvas({ style, children, onTap, testID }: Props) {
   const [size, setSize] = useState({ w: 0, h: 0 });
   const sizeRef = useRef(size);
   sizeRef.current = size;
@@ -153,6 +154,7 @@ export default function ZoomableCanvas({ style, children, onTap }: Props) {
       style={[styles.container, style]}
       onLayout={(e) => setSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}
       collapsable={false}
+      testID={testID}
     >
       <GestureDetector gesture={composed}>
         <Animated.View style={[StyleSheet.absoluteFill, animatedStyle]} collapsable={false}>
